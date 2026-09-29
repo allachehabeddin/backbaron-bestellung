@@ -161,14 +161,14 @@ function orderLines(co) {
 
 // ---------------------------------------------------------------- the message
 
-// WhatsApp shows text between ``` in a fixed-width font, about 28 characters wide on a phone, so the
+// WhatsApp shows text between ``` in a fixed-width font, about 25–28 characters wide on a phone, so the
 // WhatsApp table is built to that width: code | name | cartons, a long name wrapped under its own column.
 function buildMessage(co, forWhatsApp) {
   const c = S.companies[co] || {};
   const lines = orderLines(co);
   const hasCode = lines.some(l => l.code);
   const head = (c.header || "BackBaron – S-Bhf Marzahn").replace(/\{Lieferdatum\}/g, deDate(S.lief));
-  const WIDTH = 28;
+  const WIDTH = 25;   // iPhone 11 Pro fits 26 fixed-width characters, Android 28: keep one to spare
   let table;
   if (forWhatsApp) {
     const cw = hasCode ? Math.max(4, ...lines.map(l => (l.code || "-").length)) : 0;
