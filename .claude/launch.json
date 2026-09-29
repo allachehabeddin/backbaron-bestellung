@@ -1,0 +1,6 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    { "name": "bestellung", "runtimeExecutable": "python3", "runtimeArgs": ["-m", "http.server", "8766", "--directory", "/Users/alaa/Projects/backbaron-bestellung"], "port": 8766 }
+  ]
+}

@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>طلبيات BackBaron</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#1f3a5f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Bestellung">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<style>
+html{color-scheme:light}
+body{margin:0;padding-top:env(safe-area-inset-top,0px)}
+[hidden]{display:none!important}
+
+:root{
+  --paper:#f3f5f8; --card:#ffffff; --ink:#15202e; --muted:#5d6b7c; --line:#dde3ea;
+  --navy:#1f3a5f; --navy-ink:#ffffff; --chip:#e7edf5;
+  --wa:#127c4a; --wa-ink:#ffffff; --mail:#1f3a5f;
+  --pick:#fff4d6; --pick-line:#e9c86a; --warn:#a33a1f;
+  --sans:"IBM Plex Sans Arabic", "Geeza Pro", "Segoe UI", Tahoma, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#10161f; --card:#18212d; --ink:#e8edf3; --muted:#9aa8b8; --line:#2a3645;
+    --navy:#8fb3e0; --navy-ink:#0e1621; --chip:#223044;
+    --wa:#35b57a; --wa-ink:#07140d; --mail:#8fb3e0;
+    --pick:#2d2814; --pick-line:#8a7430; --warn:#f08a6c;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#10161f; --card:#18212d; --ink:#e8edf3; --muted:#9aa8b8; --line:#2a3645;
+  --navy:#8fb3e0; --navy-ink:#0e1621; --chip:#223044;
+  --wa:#35b57a; --wa-ink:#07140d; --mail:#8fb3e0;
+  --pick:#2d2814; --pick-line:#8a7430; --warn:#f08a6c;
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 120px}
+.wrap{max-width:760px;margin-inline:auto}
+header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;padding-block:18px 10px;flex-wrap:wrap}
+h1{font-size:22px;margin:0;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+.sub{color:var(--muted);font-size:13px}
+button{font:inherit;cursor:pointer}
+.linkbtn{background:var(--card);border:1px solid var(--line);border-radius:999px;color:var(--navy);padding:6px 12px;font-weight:600;font-size:13.5px}
+.tools{display:flex;gap:6px;flex-wrap:wrap}
+.linkbtn:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--navy);outline-offset:2px}
+.tabs{display:flex;gap:6px;overflow-x:auto;padding-block:4px 10px}
+.tab{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:7px 14px;white-space:nowrap;font-weight:600;display:flex;gap:8px;align-items:center}
+.tab[aria-selected="true"]{background:var(--navy);color:var(--navy-ink);border-color:var(--navy)}
+.tab .n{font-family:var(--mono);font-size:12px;background:var(--pick);color:var(--ink);border-radius:999px;padding:0 7px}
+.search{width:100%;padding:11px 14px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);font:inherit}
+.bar{display:flex;gap:8px;align-items:center;margin-block:10px;flex-wrap:wrap}
+.bar .grow{flex:1}
+.filter{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 10px;font-size:13px}
+.filter[aria-pressed="true"]{background:var(--chip);border-color:var(--navy)}
+.list{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row.picked{background:var(--pick);box-shadow:inset -3px 0 0 var(--pick-line)}
+.name{font-weight:500;overflow-wrap:anywhere}
+.meta{display:flex;gap:10px;color:var(--muted);font-size:12.5px;font-family:var(--mono);flex-wrap:wrap}
+.qty{display:flex;align-items:center;gap:4px}
+.qty button{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:19px;line-height:1}
+.qty input{width:52px;height:36px;text-align:center;border:1px solid var(--line);border-radius:9px;background:var(--card);color:var(--ink);font-family:var(--mono);font-size:16px;font-variant-numeric:tabular-nums}
+.empty{padding:28px 14px;color:var(--muted);text-align:center}
+.dock{position:fixed;inset-inline:0;bottom:0;background:var(--card);border-top:1px solid var(--line);padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px))}
+.dock .in{max-width:760px;margin-inline:auto;display:flex;gap:10px;align-items:center}
+.dock .count{flex:1;color:var(--muted);font-size:14px}
+.dock .count b{color:var(--ink);font-family:var(--mono)}
+.primary{background:var(--navy);color:var(--navy-ink);border:0;border-radius:10px;padding:11px 18px;font-weight:700}
+.primary:disabled{opacity:.45;cursor:default}
+.ghost{background:none;border:1px solid var(--line);color:var(--ink);border-radius:10px;padding:10px 14px}
+.sheet{position:fixed;inset:0;background:rgba(10,16,24,.45);display:flex;align-items:flex-end;justify-content:center;z-index:5}
+.panel{background:var(--card);width:100%;max-width:760px;max-height:92%;overflow:auto;border-radius:16px 16px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.panel h2{margin:0;font-size:18px}
+.panel label{font-size:13px;color:var(--muted);display:flex;flex-direction:column;gap:6px}
+.panel input[type=text],.panel input[type=date],.panel input[type=tel],.panel input[type=email],.panel textarea{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+.panel textarea{font-family:var(--mono);font-size:13.5px;min-height:120px;direction:ltr;text-align:left}
+pre.msg{margin:0;background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:12px;font-family:var(--mono);font-size:13px;white-space:pre-wrap;direction:ltr;text-align:left;overflow-wrap:anywhere}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.actions a,.actions button{display:flex;justify-content:center;align-items:center;gap:8px;text-decoration:none;border-radius:10px;padding:12px;font-weight:700;border:0}
+.wa{background:var(--wa);color:var(--wa-ink)}
+.mail{background:var(--mail);color:var(--navy-ink)}
+.copy{background:var(--chip);color:var(--ink)}
+.note{font-size:12.5px;color:var(--muted)}
+.testbar{background:var(--pick);border:1px solid var(--pick-line);border-radius:10px;padding:9px 12px;font-weight:600;margin-block:4px 8px}
+.datebox{display:flex;align-items:center;gap:8px}
+.datebox button{width:40px;height:40px;border-radius:9px;border:1px solid var(--line);background:var(--paper);color:var(--ink);font-size:20px}
+.datebox input{flex:1;min-width:0;font-family:var(--mono)!important;font-size:17px!important;text-align:center;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:8px}
+.datebox span{font-family:var(--mono);color:var(--muted);min-width:3ch}
+.actions .blocked{opacity:.35;pointer-events:none}
+.warn{color:var(--warn)}
+.addr{font-family:var(--mono);direction:ltr;unicode-bidi:isolate}
+.hist{display:flex;flex-direction:column;gap:6px}
+.hist button{text-align:start;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--ink)}
+.status{font-size:13px;color:var(--muted);min-height:1.4em}
+@media (prefers-reduced-motion:no-preference){.row{transition:background .15s}}
+
+.login{max-width:380px;margin:12vh auto 0;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px 18px;display:flex;flex-direction:column;gap:12px}
+.login h1{font-size:20px}
+.login input{font:inherit;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:11px 12px;direction:ltr;text-align:left}
+.who{color:var(--muted);font-size:12.5px;font-family:var(--mono);direction:ltr}
+
+</style>
+</head>
+<body>
+<div class="login" id="loginView" hidden>
+  <h1>طلبيات BackBaron</h1>
+  <div class="note">ادخل بالإيميل وكلمة المرور التي أعطاك إياها علاء.</div>
+  <input type="email" id="lEmail" autocomplete="username" placeholder="E-Mail">
+  <input type="password" id="lPass" autocomplete="current-password" placeholder="Passwort">
+  <div class="status warn" id="lStatus"></div>
+  <button class="primary" id="lGo" type="button">دخول</button>
+</div>
+<div id="appView" hidden>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>طلبيات BackBaron</h1>
+      <div class="sub">اختر الأصناف وعدد الكراتين، ثم أرسل الطلب إلى الشركة</div>
+      <div class="who" id="who"></div>
+    </div>
+    <div class="tools">
+      <button class="linkbtn" id="btnTest" type="button">وضع التجربة</button>
+      <button class="linkbtn" id="btnSettings" type="button">إعدادات الشركة</button>
+      <button class="linkbtn" id="btnImport" type="button">تحديث الأصناف من الإكسل</button>
+      <input type="file" id="fileXl" accept=".xlsm,.xlsx" hidden>
+      <button class="linkbtn" id="btnLogout" type="button">خروج</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" role="tablist"></nav>
+  <input class="search" id="q" type="search" placeholder="ابحث بالاسم أو الكود" autocomplete="off">
+  <div class="bar">
+    <button class="filter" id="onlyPicked" type="button" aria-pressed="false">المختار فقط</button>
+    <button class="filter" id="lastOrder" type="button">آخر طلب</button>
+    <span class="grow"></span>
+    <button class="filter" id="clearAll" type="button">تفريغ الكميات</button>
+  </div>
+  <div class="testbar" id="testBar" hidden></div>
+  <div class="status" id="status">جارٍ التحميل…</div>
+  <div class="list" id="list"></div>
+</div>
+
+<div class="dock">
+  <div class="in">
+    <div class="count" id="count">لا أصناف مختارة</div>
+    <button class="primary" id="btnReview" type="button" disabled>مراجعة وإرسال</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheetSend" hidden>
+  <div class="panel" role="dialog" aria-labelledby="sendTitle">
+    <h2 id="sendTitle">الطلب</h2>
+    <label id="dateWrap">تاريخ التسليم (Lieferdatum)
+      <div class="datebox" dir="ltr">
+        <button type="button" id="dPrev" aria-label="يوم قبل">‹</button>
+        <input type="text" id="lieferdatum" inputmode="numeric" autocomplete="off" aria-label="Lieferdatum">
+        <span id="dDay"></span>
+        <button type="button" id="dNext" aria-label="يوم بعد">›</button>
+      </div>
+    </label>
+    <pre class="msg" id="msg"></pre>
+    <div class="note warn" id="arWarn" hidden></div>
+    <div class="actions">
+      <a class="wa" id="aWa" href="#" target="_blank" rel="noopener">واتساب</a>
+      <a class="mail" id="aMail" href="#" target="_blank" rel="noopener">إيميل (Gmail)</a>
+      <button class="copy" id="btnCopy" type="button">نسخ النص</button>
+    </div>
+    <button class="linkbtn" id="btnSettings2" type="button">⚙︎ إعدادات هذه الشركة (الرقم، الإيميل، الترويسة)</button>
+    <div class="note" id="toLine"></div>
+    <button class="ghost" id="closeSend" type="button">رجوع</button>
+  </div>
+</div>
+
+<div class="sheet" id="sheetSettings" hidden>
+  <div class="panel" role="dialog" aria-labelledby="setTitle">
+    <h2 id="setTitle">إعدادات الشركة</h2>
+    <label>الترويسة (تظهر في أول الرسالة، و{Lieferdatum} يُستبدل بالتاريخ)
+      <textarea id="sHeader" rows="6"></textarea>
+    </label>
+    <label>خاتمة الرسالة (اختيارية)
+      <textarea id="sFooter" rows="2"></textarea>
+    </label>
+    <label>رقم الواتساب (مع رمز الدولة، مثل 4917612345678)
+      <input type="tel" id="sWa" inputmode="tel" dir="ltr">
+    </label>
+    <label>الإيميل
+      <input type="email" id="sMail" dir="ltr">
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)">
+      <input type="checkbox" id="sDate"> اسأل عن تاريخ التسليم
+    </label>
+    <div class="status" id="setStatus"></div>
+    <div class="actions">
+      <button class="primary" id="saveSettings" type="button">حفظ</button>
+      <button class="ghost" id="closeSettings" type="button">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheetTest" hidden>
+  <div class="panel" role="dialog" aria-labelledby="testTitle">
+    <h2 id="testTitle">وضع التجربة</h2>
+    <div class="note">ما دام مفعّلاً يذهب كل إرسال واتساب إلى هذا الرقم بدل رقم الشركة، ولا يُحفظ الطلب. الإيميل لا يُفتح في وضع التجربة. هذا الإعداد لهذا الجهاز وحده.</div>
+    <label>رقمك (مع رمز الدولة، مثل 4917612345678)
+      <input type="tel" id="tNum" inputmode="tel" dir="ltr">
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:8px;color:var(--ink)">
+      <input type="checkbox" id="tOn"> التجربة مفعّلة
+    </label>
+    <div class="status" id="testStatus"></div>
+    <div class="actions">
+      <button class="primary" id="saveTest" type="button">حفظ</button>
+      <button class="ghost" id="closeTest" type="button">إلغاء</button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheetHist" hidden>
+  <div class="panel" role="dialog" aria-labelledby="histTitle">
+    <h2 id="histTitle">الطلبات السابقة</h2>
+    <div class="hist" id="histList"></div>
+    <button class="ghost" id="closeHist" type="button">رجوع</button>
+  </div>
+</div>
+
+</div>
+<script type="module" src="app.js"></script>
+</body>
+</html>
