@@ -316,6 +316,7 @@ $("#lastOrder").onclick = () => {
     const d = new Date(o.sentAt);
     b.textContent = d.getDate() + "." + (d.getMonth() + 1) + "." + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) +
       " — " + o.lines.length + " صنف · " + o.lines.reduce((a, l) => a + l.qty, 0) + " كرتون" + (o.by ? " · " + o.by.split("@")[0] : "");
+    b.className = "main";
     b.onclick = () => {
       const items = (S.catalog[S.cur] && S.catalog[S.cur].items) || [];
       S.drafts[S.cur] = { qty: {} };
@@ -325,11 +326,62 @@ $("#lastOrder").onclick = () => {
       }
       $("#sheetHist").hidden = true; S.onlyPicked = true; render();
     };
-    list.append(b);
+    const pdf = document.createElement("button"); pdf.type = "button"; pdf.className = "pdfbtn"; pdf.textContent = "PDF";
+    pdf.setAttribute("aria-label", "حفظ هذا الطلب PDF");
+    pdf.onclick = () => orderPdf(o);
+    const row = document.createElement("div"); row.className = "hrow";
+    row.append(b, pdf);
+    list.append(row);
   }
   $("#sheetHist").hidden = false;
 };
 $("#closeHist").onclick = () => { $("#sheetHist").hidden = true; };
+
+// A sent order as a PDF to keep: German like the message itself (no Arabic font is embedded).
+// On the phone the share sheet offers "Save to Files" / OneDrive; elsewhere it downloads.
+async function orderPdf(o) {
+  if (!window.jspdf || !window.jspdf.jsPDF) { status("تعذّر تحميل صانع الـPDF، تأكد من الإنترنت وأعد فتح التطبيق", true); return; }
+  const { jsPDF } = window.jspdf;
+  const d = new Date(o.sentAt);
+  const when = pad(d.getDate()) + "." + pad(d.getMonth() + 1) + "." + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+  const c = S.companies[o.company] || {};
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  doc.setFont("helvetica", "bold"); doc.setFontSize(17);
+  doc.text("Bestellung " + o.company, 18, 22);
+  doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(70);
+  const info = ["Gesendet: " + when + (o.via ? " per " + (o.via === "email" ? "E-Mail" : "WhatsApp") : "") + (o.by ? " – von " + o.by : "")];
+  if (o.lieferdatum) info.push("Lieferdatum: " + deDate(o.lieferdatum));
+  doc.text(info, 18, 30);
+  const head = (c.header || "").replace(/\{Lieferdatum\}/g, deDate(o.lieferdatum || "")).replace(/_{4,}/g, "").trim();
+  let y = 30 + info.length * 5.5 + 4;
+  if (head) {
+    doc.setFontSize(9.5); doc.setTextColor(110);
+    const hl = head.split("\n").filter(Boolean);
+    doc.text(hl, 18, y); y += hl.length * 4.6 + 4;
+  }
+  const hasCode = o.lines.some(l => l.code);
+  const total = o.lines.reduce((a, l) => a + l.qty, 0);
+  doc.autoTable({
+    startY: y,
+    head: [hasCode ? ["Art.-Nr.", "Artikel", "Menge (Ktn)"] : ["Artikel", "Menge (Ktn)"]],
+    body: o.lines.map(l => hasCode ? [l.code || "-", l.name, String(l.qty)] : [l.name, String(l.qty)]),
+    foot: [(hasCode ? ["", "Summe"] : ["Summe"]).concat([{ content: String(total), styles: { halign: "right" } }])],
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 10, cellPadding: 2.2, textColor: 30, lineColor: 210 },
+    headStyles: { fillColor: [31, 58, 95], textColor: 255 },
+    footStyles: { fillColor: [243, 245, 248], textColor: 30, fontStyle: "bold" },
+    columnStyles: hasCode ? { 0: { cellWidth: 26 }, 2: { cellWidth: 28, halign: "right" } } : { 1: { cellWidth: 28, halign: "right" } },
+    margin: { left: 18, right: 18 },
+  });
+  doc.setFontSize(8.5); doc.setTextColor(140);
+  doc.text("BackBaron S-Bhf Marzahn", 18, 287);
+  const name = "Bestellung_" + o.company + "_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".pdf";
+  const file = new File([doc.output("blob")], name, { type: "application/pdf" });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: name });
+    else doc.save(name);
+  } catch (e) { if (e && e.name !== "AbortError") doc.save(name); }
+}
 
 $("#onlyPicked").onclick = () => { S.onlyPicked = !S.onlyPicked; render(); };
 $("#clearAll").onclick = () => {

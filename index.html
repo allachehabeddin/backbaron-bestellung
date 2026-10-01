@@ -15,6 +15,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" defer></script>
 <style>
 html{color-scheme:light}
 body{margin:0;padding-top:env(safe-area-inset-top,0px)}
@@ -103,6 +105,9 @@ pre.msg{margin:0;background:var(--paper);border:1px solid var(--line);border-rad
 .addr{font-family:var(--mono);direction:ltr;unicode-bidi:isolate}
 .hist{display:flex;flex-direction:column;gap:6px}
 .hist button{text-align:start;background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:9px 11px;color:var(--ink)}
+.hrow{display:flex;gap:6px;align-items:stretch}
+.hrow .main{flex:1;min-width:0}
+.hist .pdfbtn{text-align:center;font-weight:700;color:var(--navy);min-width:64px}
 .status{font-size:13px;color:var(--muted);min-height:1.4em}
 @media (prefers-reduced-motion:no-preference){.row{transition:background .15s}}
 
