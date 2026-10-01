@@ -108,7 +108,7 @@ function renderList() {
     const nm = document.createElement("div"); nm.className = "name"; nm.dir = "auto"; nm.textContent = it.name;
     const meta = document.createElement("div"); meta.className = "meta";
     if (it.code) { const c = document.createElement("span"); c.textContent = "#" + it.code; meta.append(c); }
-    const u = [it.unit, it.pack ? it.pack + " stk" : ""].filter(Boolean).join(" · ");
+    const u = [it.unit, it.pack ? it.pack + " stk" : "", it.price != null ? money(it.price) : ""].filter(Boolean).join(" · ");
     if (u) { const c = document.createElement("span"); c.dir = "ltr"; c.textContent = u; meta.append(c); }
     left.append(nm, meta);
     const q = document.createElement("div"); q.className = "qty";
@@ -129,7 +129,8 @@ function renderList() {
 function renderCount() {
   const lines = orderLines(S.cur);
   const n = lines.length, tot = lines.reduce((a, l) => a + l.qty, 0);
-  $("#count").innerHTML = n ? "<b>" + n + "</b> صنف · <b>" + tot + "</b> كرتون" : "لا أصناف مختارة";
+  const v = orderValue(S.cur, lines);
+  $("#count").innerHTML = n ? "<b>" + n + "</b> صنف · <b>" + tot + "</b> كرتون" + (v.priced ? " · <b>" + money(v.net) + "</b>" : "") : "لا أصناف مختارة";
   $("#btnReview").disabled = !n;
 }
 
@@ -153,10 +154,26 @@ function setQty(k, n) {
   }, 700);
 }
 
+// Prices are for us only: shown in the app and the saved PDF, never in the message to the supplier.
+const money = n => (Math.round(n * 100) / 100).toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+function orderValue(co, lines) {
+  const pfandIncluded = !!(S.catalog[co] && S.catalog[co].pfandIncluded);
+  let net = 0, vat = 0, pfand = 0, priced = 0, unpriced = 0;
+  for (const l of lines) {
+    if (l.price == null) { unpriced++; continue; }
+    priced++;
+    const n = l.price * l.qty;
+    net += n; vat += n * (l.vat || 0);
+    if (!pfandIncluded && l.pfand) pfand += l.pfand * l.qty;   // Best bills the deposit on top; Polat's price holds it
+  }
+  return { net, vat, gross: net + vat, pfand, pfandIncluded, priced, unpriced };
+}
+
 function orderLines(co) {
   const items = (S.catalog[co] && S.catalog[co].items) || [];
   const qty = qtyOf(co);
-  return items.filter(it => qty[itemKey(it)] > 0).map(it => ({ code: it.code, name: it.name, qty: qty[itemKey(it)] }));
+  return items.filter(it => qty[itemKey(it)] > 0).map(it => ({ code: it.code, name: it.name, qty: qty[itemKey(it)],
+    price: it.price ?? null, vat: it.vat ?? null, pfand: it.pfand ?? null }));
 }
 
 // ---------------------------------------------------------------- the message
@@ -221,6 +238,18 @@ function refreshSend() {
   const text = buildMessage(S.cur, false);
   const waText = buildMessage(S.cur, true);
   $("#msg").textContent = waText.replace(/```\n?/g, "");   // show the table as WhatsApp will
+  const v = orderValue(S.cur, orderLines(S.cur)), box = $("#valueBox");
+  box.hidden = !v.priced;
+  if (v.priced) {
+    box.textContent = "";
+    const t = document.createElement("div"); t.className = "vt"; t.textContent = "قيمة الطلب — لك فقط، لا تُرسل للمورّد"; box.append(t);
+    const rowv = (k, val, strong) => { const d = document.createElement("div"); d.className = "vr" + (strong ? " strong" : "");
+      const a1 = document.createElement("span"); a1.textContent = k; const a2 = document.createElement("span"); a2.className = "num"; a2.textContent = val; d.append(a1, a2); box.append(d); };
+    rowv("الصافي", money(v.net)); rowv("الضريبة", money(v.vat)); rowv("الإجمالي مع الضريبة", money(v.gross), true);
+    if (v.pfand) rowv("Pfand (يُضاف)", money(v.pfand));
+    if (v.pfandIncluded) { const n = document.createElement("div"); n.className = "note"; n.textContent = "أسعار " + S.cur + " تشمل الـPfand."; box.append(n); }
+    if (v.unpriced) { const n = document.createElement("div"); n.className = "note warn"; n.textContent = v.unpriced + " صنف بلا سعر في الملف، غير محسوب."; box.append(n); }
+  }
   // the supplier must never receive Arabic, whatever language the screen is in
   const AR = /[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]/;
   const bad = text.split("\n").filter(l => AR.test(l));
@@ -270,7 +299,10 @@ function selectMsg() { const r = document.createRange(); r.selectNodeContents($(
 async function recordSent(via) {
   const co = S.cur;
   if (testOn()) return;
-  const rec = { company: co, via, by: S.user.email, lines: orderLines(co),
+  const recLines = orderLines(co);
+  const rv = orderValue(co, recLines);
+  const rec = { company: co, via, by: S.user.email, lines: recLines,
+                value: { net: rv.net, vat: rv.vat, gross: rv.gross, pfand: rv.pfand, pfandIncluded: rv.pfandIncluded, unpriced: rv.unpriced },
                 lieferdatum: (S.companies[co] || {}).askDate ? S.lief : "", sentAt: new Date().toISOString() };
   if (!rec.lines.length) return;
   try {
@@ -361,18 +393,39 @@ async function orderPdf(o) {
   }
   const hasCode = o.lines.some(l => l.code);
   const total = o.lines.reduce((a, l) => a + l.qty, 0);
+  const priced = o.lines.some(l => l.price != null);   // orders sent before prices were imported have none
+  const R = x => ({ content: x, styles: { halign: "right" } });
+  let tHead, tBody, tFoot, colStyles;
+  if (priced) {
+    const v = o.value || orderValue(o.company, o.lines);
+    tHead = [(hasCode ? ["Art.-Nr."] : []).concat(["Artikel", R("Ktn"), R("Preis netto"), R("Summe netto")])];
+    tBody = o.lines.map(l => (hasCode ? [l.code || "-"] : []).concat([l.name, R(String(l.qty)),
+      R(l.price != null ? money(l.price) : "–"), R(l.price != null ? money(l.price * l.qty) : "–")]));
+    const pad0 = hasCode ? 2 : 1;
+    const sumRow = (label, val, bold) => Array(pad0 - 1).fill("").concat([{ content: label, colSpan: 1 }, R(bold ? String(total) : ""), "", R(val)]);
+    tFoot = [sumRow("Netto", money(v.net), true), sumRow("MwSt.", money(v.vat)), sumRow("Brutto", money(v.gross))];
+    if (v.pfand) tFoot.push(sumRow("Pfand", money(v.pfand)));
+    colStyles = hasCode ? { 0: { cellWidth: 22 }, 2: { cellWidth: 14 }, 3: { cellWidth: 28 }, 4: { cellWidth: 30 } }
+                        : { 1: { cellWidth: 14 }, 2: { cellWidth: 28 }, 3: { cellWidth: 30 } };
+  } else {
+    tHead = [hasCode ? ["Art.-Nr.", "Artikel", "Menge (Ktn)"] : ["Artikel", "Menge (Ktn)"]];
+    tBody = o.lines.map(l => hasCode ? [l.code || "-", l.name, String(l.qty)] : [l.name, String(l.qty)]);
+    tFoot = [(hasCode ? ["", "Summe"] : ["Summe"]).concat([R(String(total))])];
+    colStyles = hasCode ? { 0: { cellWidth: 26 }, 2: { cellWidth: 28, halign: "right" } } : { 1: { cellWidth: 28, halign: "right" } };
+  }
   doc.autoTable({
-    startY: y,
-    head: [hasCode ? ["Art.-Nr.", "Artikel", "Menge (Ktn)"] : ["Artikel", "Menge (Ktn)"]],
-    body: o.lines.map(l => hasCode ? [l.code || "-", l.name, String(l.qty)] : [l.name, String(l.qty)]),
-    foot: [(hasCode ? ["", "Summe"] : ["Summe"]).concat([{ content: String(total), styles: { halign: "right" } }])],
+    startY: y, head: tHead, body: tBody, foot: tFoot,
     theme: "grid",
     styles: { font: "helvetica", fontSize: 10, cellPadding: 2.2, textColor: 30, lineColor: 210 },
     headStyles: { fillColor: [31, 58, 95], textColor: 255 },
     footStyles: { fillColor: [243, 245, 248], textColor: 30, fontStyle: "bold" },
-    columnStyles: hasCode ? { 0: { cellWidth: 26 }, 2: { cellWidth: 28, halign: "right" } } : { 1: { cellWidth: 28, halign: "right" } },
+    columnStyles: colStyles,
     margin: { left: 18, right: 18 },
   });
+  if (priced && o.value && o.value.pfandIncluded) {
+    doc.setFontSize(8.5); doc.setTextColor(110);
+    doc.text("Preise inkl. Pfand.", 18, doc.lastAutoTable.finalY + 6);
+  }
   doc.setFontSize(8.5); doc.setTextColor(140);
   doc.text("BackBaron S-Bhf Marzahn", 18, 287);
   const name = "Bestellung_" + o.company + "_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".pdf";
@@ -427,10 +480,14 @@ $("#fileXl").onchange = async e => {
       const ws = wb.Sheets[sn];
       if (sn === "_template" || !ws.Z1 || String(ws.Z1.v) !== "company") continue;   // the company sheets carry "company" in Z1
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1, range: 3, blankrows: false, defval: "" });
+      const num = v => (v === "" || v == null || !Number.isFinite(+v)) ? null : +v;
       const items = rows.filter(r => String(r[2]).trim()).map(r => ({
         code: String(r[1] ?? "").trim(), name: String(r[2]).trim(), unit: String(r[3] ?? "").trim(),
-        pack: Number.isFinite(+r[7]) && String(r[7]) !== "" ? Math.round(+r[7]) : null }));
-      batch.set(doc(db, "catalog", sn), { items, updatedAt: new Date().toISOString(), by: S.user.email });
+        pack: num(r[7]) != null ? Math.round(num(r[7])) : null,
+        price: num(r[4]), vat: num(r[5]), pfand: num(r[6]) }));
+      // H1 says whether this company's prices already include the deposit (Polat: yes)
+      const pfandIncluded = !!(ws.H1 && String(ws.H1.v).trim() === "نعم");
+      batch.set(doc(db, "catalog", sn), { items, pfandIncluded, updatedAt: new Date().toISOString(), by: S.user.email });
       found.push(sn + " (" + items.length + ")");
     }
     if (!found.length) { status("لم أجد أوراق شركات في هذا الملف. اختر ملف «أسعار الموردين.xlsm»", true); return; }
