@@ -295,18 +295,20 @@ $("#btnCopy").onclick = () => {
 function selectMsg() { const r = document.createRange(); r.selectNodeContents($("#msg")); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
 
 // Pressing WhatsApp or Email counts as sending: the order is saved with who sent it, and the
-// quantities are cleared. Test mode saves nothing and keeps the quantities.
+// quantities are cleared. In test mode the order is saved too, marked as a test, and the
+// quantities stay so the same order can be tried again.
 async function recordSent(via) {
   const co = S.cur;
-  if (testOn()) return;
+  const test = testOn();
   const recLines = orderLines(co);
   const rv = orderValue(co, recLines);
-  const rec = { company: co, via, by: S.user.email, lines: recLines,
+  const rec = { company: co, via, by: S.user.email, lines: recLines, test,
                 value: { net: rv.net, vat: rv.vat, gross: rv.gross, pfand: rv.pfand, pfandIncluded: rv.pfandIncluded, unpriced: rv.unpriced },
                 lieferdatum: (S.companies[co] || {}).askDate ? S.lief : "", sentAt: new Date().toISOString() };
   if (!rec.lines.length) return;
   try {
     await addDoc(collection(db, "orders"), rec);
+    if (test) { $("#sheetSend").hidden = true; status("حُفظت التجربة في «آخر طلب» (معلَّمة «تجربة»)، والكميات باقية"); return; }
     S.drafts[co] = { qty: {} };
     await setDoc(doc(db, "drafts", co), { qty: {}, updatedAt: rec.sentAt, by: S.user.email });
     $("#sheetSend").hidden = true;
@@ -347,7 +349,7 @@ $("#lastOrder").onclick = () => {
     const b = document.createElement("button"); b.type = "button";
     const d = new Date(o.sentAt);
     b.textContent = d.getDate() + "." + (d.getMonth() + 1) + "." + d.getFullYear() + " " + pad(d.getHours()) + ":" + pad(d.getMinutes()) +
-      " — " + o.lines.length + " صنف · " + o.lines.reduce((a, l) => a + l.qty, 0) + " كرتون" + (o.by ? " · " + o.by.split("@")[0] : "");
+      " — " + o.lines.length + " صنف · " + o.lines.reduce((a, l) => a + l.qty, 0) + " كرتون" + (o.by ? " · " + o.by.split("@")[0] : "") + (o.test ? " · تجربة" : "");
     b.className = "main";
     b.onclick = () => {
       const items = (S.catalog[S.cur] && S.catalog[S.cur].items) || [];
@@ -379,7 +381,7 @@ async function orderPdf(o) {
   const c = S.companies[o.company] || {};
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   doc.setFont("helvetica", "bold"); doc.setFontSize(17);
-  doc.text("Bestellung " + o.company, 18, 22);
+  doc.text("Bestellung " + o.company + (o.test ? " (TEST)" : ""), 18, 22);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10.5); doc.setTextColor(70);
   const info = ["Gesendet: " + when + (o.via ? " per " + (o.via === "email" ? "E-Mail" : "WhatsApp") : "") + (o.by ? " – von " + o.by : "")];
   if (o.lieferdatum) info.push("Lieferdatum: " + deDate(o.lieferdatum));
@@ -428,7 +430,7 @@ async function orderPdf(o) {
   }
   doc.setFontSize(8.5); doc.setTextColor(140);
   doc.text("BackBaron S-Bhf Marzahn", 18, 287);
-  const name = "Bestellung_" + o.company + "_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".pdf";
+  const name = (o.test ? "TEST_" : "") + "Bestellung_" + o.company + "_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".pdf";
   const file = new File([doc.output("blob")], name, { type: "application/pdf" });
   try {
     if (navigator.canShare && navigator.canShare({ files: [file] })) await navigator.share({ files: [file], title: name });
