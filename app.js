@@ -10,6 +10,7 @@ import { firebaseConfig } from "./firebase-config.js";
 
 const $ = s => document.querySelector(s);
 const ORDER = ["FSI", "Polat", "Best", "Selgros"];
+const APP_VERSION = "6";   // shown under the title, so it is clear the phone runs the latest version
 
 // First-run defaults for the suppliers' letterheads and numbers (written once when the database is empty).
 const DEFAULT_COMPANIES = {
@@ -51,7 +52,7 @@ onAuthStateChanged(auth, user => {
   S.user = user;
   $("#loginView").hidden = !!user;
   $("#appView").hidden = !user;
-  if (user) { $("#who").textContent = user.email; start(); }
+  if (user) { $("#who").textContent = user.email + " · v" + APP_VERSION; start(); }
 });
 $("#lGo").onclick = async () => {
   $("#lStatus").textContent = "";
@@ -395,7 +396,16 @@ async function orderPdf(o) {
   }
   const hasCode = o.lines.some(l => l.code);
   const total = o.lines.reduce((a, l) => a + l.qty, 0);
-  const priced = o.lines.some(l => l.price != null);   // orders sent before prices were imported have none
+  // orders sent before prices were imported have none: take today's prices from the list and say so
+  let priced = o.lines.some(l => l.price != null), todayPrices = false;
+  if (!priced) {
+    const items = (S.catalog[o.company] && S.catalog[o.company].items) || [];
+    const withPrice = o.lines.map(l => {
+      const it = items.find(x => (l.code && x.code === l.code) || (!l.code && x.name === l.name));
+      return it && it.price != null ? Object.assign({}, l, { price: it.price, vat: it.vat, pfand: it.pfand }) : l;
+    });
+    if (withPrice.some(l => l.price != null)) { o = Object.assign({}, o, { lines: withPrice, value: null }); priced = true; todayPrices = true; }
+  }
   const R = x => ({ content: x, styles: { halign: "right" } });
   let tHead, tBody, tFoot, colStyles;
   if (priced) {
@@ -424,10 +434,10 @@ async function orderPdf(o) {
     columnStyles: colStyles,
     margin: { left: 18, right: 18 },
   });
-  if (priced && o.value && o.value.pfandIncluded) {
-    doc.setFontSize(8.5); doc.setTextColor(110);
-    doc.text("Preise inkl. Pfand.", 18, doc.lastAutoTable.finalY + 6);
-  }
+  const notes = [];
+  if (priced && (o.value ? o.value.pfandIncluded : (S.catalog[o.company] || {}).pfandIncluded)) notes.push("Preise inkl. Pfand.");
+  if (todayPrices) { const t = new Date(); notes.push("Preise: Stand " + pad(t.getDate()) + "." + pad(t.getMonth() + 1) + "." + t.getFullYear() + " – diese Bestellung wurde vor dem Speichern der Preise gesendet."); }
+  if (notes.length) { doc.setFontSize(8.5); doc.setTextColor(110); doc.text(notes, 18, doc.lastAutoTable.finalY + 6); }
   doc.setFontSize(8.5); doc.setTextColor(140);
   doc.text("BackBaron S-Bhf Marzahn", 18, 287);
   const name = (o.test ? "TEST_" : "") + "Bestellung_" + o.company + "_" + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".pdf";
