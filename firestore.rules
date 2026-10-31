@@ -1,0 +1,13 @@
+rules_version = '2';
+// Only people signed in with an account Alaa created in Firebase Authentication can read or write.
+// Sign-up from the app is off (Authentication → Settings → User actions → "Enable create" unticked),
+// so no stranger can make an account.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    match /catalog/{id}   { allow read, write: if signedIn(); }
+    match /companies/{id} { allow read, write: if signedIn(); }
+    match /drafts/{id}    { allow read, write: if signedIn(); }
+    match /orders/{id}    { allow read, create: if signedIn(); allow update, delete: if false; }
+  }
+}
